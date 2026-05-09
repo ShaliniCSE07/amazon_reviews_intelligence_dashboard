@@ -1,0 +1,11 @@
+# datasets
+data/
+*.json
+*.csv
+
+# model files (optional if too large)
+*.pkl
+
+# system files
+__pycache__/
+.env
