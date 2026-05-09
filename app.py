@@ -19,107 +19,38 @@ st.set_page_config(
 )
 
 # =========================
-# 🌈 MODERN UI STYLE (NO FEATURE CHANGE)
+# STYLING
 # =========================
 st.markdown("""
 <style>
-
-/* Background */
-body {
-    background-color: #0b1220;
-}
-
-/* Main container spacing */
 .block-container {
-    padding: 2rem 3rem;
+    padding-top: 2rem;
+    padding-left: 2rem;
+    padding-right: 2rem;
 }
 
-/* Title */
-.main-title {
-    font-size: 40px;
-    font-weight: 800;
-    text-align: center;
-    background: linear-gradient(90deg, #00c6ff, #7f00ff, #ff4ecd);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-/* Subtitle */
-.subtitle {
-    text-align: center;
-    color: #94a3b8;
-    margin-bottom: 25px;
-}
-
-/* Card style */
-.card {
-    background: #111827;
-    padding: 20px;
-    border-radius: 15px;
-    border: 1px solid #1f2937;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-}
-
-/* Summary box */
 .summary-box {
-    background: linear-gradient(135deg, #1e293b, #0f172a);
-    color: #e2e8f0;
-    padding: 18px;
-    border-radius: 12px;
-    border-left: 4px solid #3b82f6;
-    line-height: 1.6;
-}
-
-/* ✨ Glow effect for expander headers */
-div[data-testid="stExpander"] {
-    border-radius: 12px;
-    border: 1px solid #1f2937;
-    background: #0f172a;
-}
-
-/* Metric cards */
-[data-testid="metric-container"] {
-    background-color: #111827;
+    background-color: #f3f4f6;
+    color: #111827;
+    padding: 20px;
     border-radius: 10px;
-    border: 1px solid #1f2937;
+    border: 1px solid #d1d5db;
+    line-height: 1.8;
+    font-size: 16px;
 }
-
-/* File uploader */
-[data-testid="stFileUploader"] {
-    background: #111827;
-    border-radius: 12px;
-    padding: 10px;
-}
-
-/* Buttons glow */
-div.stButton > button {
-    background: linear-gradient(90deg, #00c6ff, #0072ff);
-    color: white;
-    border-radius: 10px;
-    font-weight: 600;
-    transition: 0.3s ease-in-out;
-    box-shadow: 0 0 10px rgba(0,114,255,0.4);
-}
-
-div.stButton > button:hover {
-    transform: scale(1.05);
-    box-shadow: 0 0 20px rgba(0,198,255,0.8);
-}
-
 </style>
 """, unsafe_allow_html=True)
 
 # =========================
-# HEADER (NO CHANGE IN LOGIC)
+# HEADER
 # =========================
-st.markdown("<div class='main-title'>Amazon Review Intelligence Dashboard</div>", unsafe_allow_html=True)
-st.markdown("<div class='subtitle'>Upload reviews and unlock AI-powered insights</div>", unsafe_allow_html=True)
+st.title("Amazon Review Intelligence Dashboard")
+st.caption("Upload customer reviews and analyze product feedback")
 
 uploaded_file = st.file_uploader("Upload CSV or Excel file", type=["csv", "xlsx"])
 
-
 # =========================
-# HELPERS (UNCHANGED)
+# HELPERS
 # =========================
 def detect_review_column(data):
     for col in data.columns:
@@ -136,16 +67,20 @@ def detect_rating_column(data):
 
 
 def get_feature_reviews(data, keywords):
+
     filtered = []
+
     for _, row in data.iterrows():
         review = str(row["review"]).lower()
+
         if any(word in review for word in keywords):
             filtered.append(row)
+
     return pd.DataFrame(filtered)
 
 
 # =========================
-# AI SUMMARY (UNCHANGED)
+# AI SUMMARY
 # =========================
 def generate_ai_style_summary(data):
 
@@ -181,7 +116,7 @@ def generate_ai_style_summary(data):
 
 
 # =========================
-# TOP INSIGHTS (UNCHANGED)
+# TOP INSIGHTS
 # =========================
 def extract_top_insights(data):
 
@@ -212,6 +147,7 @@ def extract_top_insights(data):
 # =========================
 if uploaded_file:
 
+    # Load file
     if uploaded_file.name.endswith(".csv"):
         data = pd.read_csv(uploaded_file)
     else:
@@ -255,9 +191,12 @@ if uploaded_file:
 
     col1, col2, col3 = st.columns(3)
 
-    col1.metric("Positive", sum(data["predicted_sentiment"]=="positive"))
-    col2.metric("Negative", sum(data["predicted_sentiment"]=="negative"))
-    col3.metric("Neutral", sum(data["predicted_sentiment"]=="neutral"))
+    with col1:
+        st.metric("Positive", sum(data["predicted_sentiment"]=="positive"))
+    with col2:
+        st.metric("Negative", sum(data["predicted_sentiment"]=="negative"))
+    with col3:
+        st.metric("Neutral", sum(data["predicted_sentiment"]=="neutral"))
 
     st.bar_chart(data["predicted_sentiment"].value_counts())
 
@@ -288,35 +227,49 @@ if uploaded_file:
                 st.markdown(f"{pct:.0f}% ({count})")
 
     # =========================
-    # FEATURE INSIGHTS (DRILL-DOWN PRESERVED)
+    # FEATURE INSIGHTS (DRILL-DOWN)
     # =========================
     st.divider()
-    st.subheader("Feature Insights 🧩")
+    st.subheader("Feature Insights (Click to Explore) 🧩")
 
     feature_results = feature_sentiment_breakdown(data)
 
     for feature, result in feature_results.items():
 
-        with st.expander(f"🔍 {feature.capitalize()} ({result['mentions']})"):
+        with st.expander(f"🔍 {feature.capitalize()} ({result['mentions']} mentions)"):
 
             col1, col2, col3 = st.columns(3)
 
-            col1.metric("Positive", result["positive"])
-            col2.metric("Negative", result["negative"])
-            col3.metric("Total", result["mentions"])
+            with col1:
+                st.metric("Positive", result["positive"])
 
-            st.markdown(f"<div class='summary-box'>{result['summary']}</div>", unsafe_allow_html=True)
+            with col2:
+                st.metric("Negative", result["negative"])
 
-            st.write("### Related Reviews")
+            with col3:
+                st.metric("Total", result["mentions"])
+
+            st.info(result["summary"])
+
+            # DRILL-DOWN SECTION
+            st.write("### 📄 Related Reviews")
 
             keywords = feature.lower().split()
+
             feature_reviews = get_feature_reviews(data, keywords)
 
             if not feature_reviews.empty:
 
-                st.dataframe(feature_reviews[["review","predicted_sentiment"]], use_container_width=True)
+                st.dataframe(
+                    feature_reviews[["review", "predicted_sentiment"]],
+                    use_container_width=True
+                )
 
-                st.bar_chart(feature_reviews["predicted_sentiment"].value_counts())
+                st.write("### 📊 Sentiment Breakdown")
+
+                st.bar_chart(
+                    feature_reviews["predicted_sentiment"].value_counts()
+                )
 
             else:
                 st.warning("No matching reviews found.")
@@ -330,17 +283,17 @@ if uploaded_file:
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.markdown("Top")
+        st.markdown("### Top Keywords")
         for w,c in extract_sentiment_keywords(data, None):
             st.write(f"{w} ({c})")
 
     with col2:
-        st.markdown("Positive")
+        st.markdown("### Positive")
         for w,c in extract_sentiment_keywords(data, "positive"):
             st.write(f"{w} ({c})")
 
     with col3:
-        st.markdown("Negative")
+        st.markdown("### Negative")
         for w,c in extract_sentiment_keywords(data, "negative"):
             st.write(f"{w} ({c})")
 
@@ -350,10 +303,16 @@ if uploaded_file:
     st.divider()
     st.subheader("AI Insights 🧠")
 
-    st.markdown(f"<div class='summary-box'>{generate_ai_style_summary(data)}</div>", unsafe_allow_html=True)
+    ai_summary = generate_ai_style_summary(data)
+
+    st.markdown(f"""
+    <div class="summary-box">
+        {ai_summary}
+    </div>
+    """, unsafe_allow_html=True)
 
     # =========================
-    # TOP ISSUES
+    # TOP ISSUES & HIGHLIGHTS
     # =========================
     st.divider()
     st.subheader("Top Issues & Highlights 📌")
@@ -363,30 +322,32 @@ if uploaded_file:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("### Highlights")
+        st.markdown("### 🟢 Highlights")
         for w,c in top_pos:
             st.success(f"{w} ({c})")
 
     with col2:
-        st.markdown("### Issues")
+        st.markdown("### 🔴 Issues")
         for w,c in top_neg:
             st.error(f"{w} ({c})")
 
     # =========================
-    # DOWNLOAD
+    # DOWNLOAD REPORT
     # =========================
     st.divider()
     st.subheader("Download Report 📥")
 
+    csv = data.to_csv(index=False).encode("utf-8")
+
     st.download_button(
-        "Download CSV Report",
-        data.to_csv(index=False).encode("utf-8"),
-        "report.csv",
-        "text/csv"
+        label="📥 Download Full Report (CSV)",
+        data=csv,
+        file_name="amazon_review_report.csv",
+        mime="text/csv"
     )
 
     # =========================
-    # DATA
+    # FINAL DATA
     # =========================
     st.divider()
     st.subheader("Detailed Reviews")
