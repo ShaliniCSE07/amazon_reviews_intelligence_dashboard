@@ -6,7 +6,8 @@ from summary import generate_feature_summary
 from sentiment import predict_sentiment
 from feature_analysis import (
     feature_sentiment_breakdown,
-    extract_sentiment_keywords
+    extract_sentiment_keywords,
+    extract_dynamic_features
 )
 
 # =========================
@@ -48,14 +49,21 @@ st.title("Amazon Review Intelligence Dashboard")
 st.caption("Upload customer reviews and analyze product feedback")
 
 uploaded_file = st.file_uploader("Upload CSV or Excel file", type=["csv", "xlsx"])
+product_name = st.text_input("Product Name/Category (e.g., Laptop, Headphone, Book)", value="Smartphone")
 
 # =========================
 # HELPERS
 # =========================
 def detect_review_column(data):
+    # Expanded list of common review column names
+    target_cols = ["review", "reviewtext", "reviews", "text", "comment", "content", "body", "feedback", "message"]
     for col in data.columns:
-        if col.lower() in ["review","reviewtext","reviews","text","comment","content"]:
+        if col.lower() in target_cols:
             return col
+    # Fallback: find column with longest average string length
+    string_cols = data.select_dtypes(include=['object']).columns
+    if not string_cols.empty:
+        return data[string_cols].apply(lambda x: x.str.len().mean()).idxmax()
     return data.columns[0]
 
 
@@ -82,64 +90,37 @@ def get_feature_reviews(data, keywords):
 # =========================
 # AI SUMMARY
 # =========================
-def generate_ai_style_summary(data):
+def generate_ai_style_summary(data, product_name):
+    """
+    Generates a natural language summary based on top dynamic keywords.
+    """
+    pos_keywords = extract_sentiment_keywords(data, "positive", top_n=5, product_name=product_name)
+    neg_keywords = extract_sentiment_keywords(data, "negative", top_n=5, product_name=product_name)
 
-    pos_reviews = data[data["predicted_sentiment"] == "positive"]["review"]
-    neg_reviews = data[data["predicted_sentiment"] == "negative"]["review"]
-
-    pos_words = ["battery","display","camera","quality","performance","design"]
-    neg_words = ["heat","slow","lag","poor","issue","problem","drain"]
-
-    pos_hits, neg_hits = [], []
-
-    for r in pos_reviews:
-        for w in pos_words:
-            if w in r.lower():
-                pos_hits.append(w)
-
-    for r in neg_reviews:
-        for w in neg_words:
-            if w in r.lower():
-                neg_hits.append(w)
-
-    pos_top = list(set(pos_hits))[:3]
-    neg_top = list(set(neg_hits))[:3]
+    pos_top = [w for w, c in pos_keywords]
+    neg_top = [w for w, c in neg_keywords]
 
     if pos_top and neg_top:
-        return f"Users are highly satisfied with {', '.join(pos_top)} but consistently report issues with {', '.join(neg_top)}."
+        return f"For the **{product_name}**, users are highly satisfied with features like **{', '.join(pos_top[:3])}** but consistently report issues with **{', '.join(neg_top[:3])}**."
     elif pos_top:
-        return f"Users are highly satisfied with {', '.join(pos_top)} overall."
+        return f"For the **{product_name}**, users are highly satisfied with **{', '.join(pos_top[:3])}** overall."
     elif neg_top:
-        return f"Users mostly report issues with {', '.join(neg_top)}."
+        return f"For the **{product_name}**, users mostly report issues with **{', '.join(neg_top[:3])}** regarding the **{product_name}**."
     else:
-        return "Users have mixed feedback across different features."
+        return f"Users have mixed feedback across different aspects of the **{product_name}**."
 
 
 # =========================
 # TOP INSIGHTS
 # =========================
-def extract_top_insights(data):
+def extract_top_insights(data, product_name):
+    """
+    Dynamically extracts top positive and negative keywords for highlights.
+    """
+    pos_top = extract_sentiment_keywords(data, "positive", top_n=3, product_name=product_name)
+    neg_top = extract_sentiment_keywords(data, "negative", top_n=3, product_name=product_name)
 
-    pos_words = ["battery","display","camera","quality","performance","design"]
-    neg_words = ["heat","slow","lag","poor","issue","problem","drain"]
-
-    pos_hits, neg_hits = [], []
-
-    for _, row in data.iterrows():
-
-        text = row["review"].lower()
-
-        if row["predicted_sentiment"] == "positive":
-            for w in pos_words:
-                if w in text:
-                    pos_hits.append(w)
-
-        if row["predicted_sentiment"] == "negative":
-            for w in neg_words:
-                if w in text:
-                    neg_hits.append(w)
-
-    return Counter(pos_hits).most_common(3), Counter(neg_hits).most_common(3)
+    return pos_top, neg_top
 
 
 # =========================
@@ -157,8 +138,20 @@ if uploaded_file:
     rating_column = detect_rating_column(data)
 
     data = data.rename(columns={review_column: "review"})
+    
+    # Clean data: handle missing values but be less aggressive with duplicates
     data = data.dropna(subset=["review"])
+    
+    # Only drop rows where the review is empty or whitespace
+    data = data[data["review"].str.strip() != ""]
+    
+    # Optional: Keep duplicates as they might be distinct reviews with same content
+    # data = data.drop_duplicates(subset=["review"]) 
+    
     data["review"] = data["review"].astype(str)
+    
+    # Reset index to ensure perfect alignment when assigning results
+    data = data.reset_index(drop=True)
 
     reviews = data["review"].tolist()
 
@@ -230,9 +223,11 @@ if uploaded_file:
     # FEATURE INSIGHTS (DRILL-DOWN)
     # =========================
     st.divider()
-    st.subheader("Feature Insights (Click to Explore) 🧩")
-
-    feature_results = feature_sentiment_breakdown(data)
+    st.subheader(f"Feature Insights for {product_name} 🧩")
+    
+    # Dynamically extract features based on reviews and product name
+    dynamic_features = extract_dynamic_features(data, product_name)
+    feature_results = feature_sentiment_breakdown(data, features=dynamic_features)
 
     for feature, result in feature_results.items():
 
@@ -284,26 +279,26 @@ if uploaded_file:
 
     with col1:
         st.markdown("### Top Keywords")
-        for w,c in extract_sentiment_keywords(data, None):
+        for w,c in extract_sentiment_keywords(data, None, product_name=product_name):
             st.write(f"{w} ({c})")
 
     with col2:
         st.markdown("### Positive")
-        for w,c in extract_sentiment_keywords(data, "positive"):
+        for w,c in extract_sentiment_keywords(data, "positive", product_name=product_name):
             st.write(f"{w} ({c})")
 
     with col3:
         st.markdown("### Negative")
-        for w,c in extract_sentiment_keywords(data, "negative"):
+        for w,c in extract_sentiment_keywords(data, "negative", product_name=product_name):
             st.write(f"{w} ({c})")
 
     # =========================
     # AI SUMMARY
     # =========================
     st.divider()
-    st.subheader("AI Insights 🧠")
+    st.subheader(f"AI Insights for {product_name} 🧠")
 
-    ai_summary = generate_ai_style_summary(data)
+    ai_summary = generate_ai_style_summary(data, product_name)
 
     st.markdown(f"""
     <div class="summary-box">
@@ -317,7 +312,7 @@ if uploaded_file:
     st.divider()
     st.subheader("Top Issues & Highlights 📌")
 
-    top_pos, top_neg = extract_top_insights(data)
+    top_pos, top_neg = extract_top_insights(data, product_name)
 
     col1, col2 = st.columns(2)
 
